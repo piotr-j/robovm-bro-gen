@@ -483,7 +483,7 @@ module Bro
       @variadic = cursor.variadic?
       cursor.visit_children do |cursor, parent|
         case cursor.kind
-        when :cursor_type_ref, :cursor_obj_c_class_ref, :cursor_obj_c_protocol_ref, :cursor_unexposed_expr, :cursor_ibaction_attr, 410, 409
+        when :cursor_type_ref, :cursor_obj_c_class_ref, :cursor_obj_c_protocol_ref, :cursor_unexposed_expr, :cursor_ibaction_attr, 409, 410, 417
           # Ignored
         when :cursor_parm_decl
           @parameters.push FunctionParameter.new cursor, "p#{param_count}"
@@ -634,7 +634,7 @@ module Bro
       @opaque = false
       cursor.visit_children do |cursor, parent|
         case cursor.kind
-        when :cursor_unexposed_expr, :cursor_struct
+        when :cursor_unexposed_expr, :cursor_struct, :cursor_template_type_parameter, :cursor_type_ref, 417
         	# ignored
         when :cursor_obj_c_class_ref
           @opaque = @name == cursor.spelling
@@ -684,7 +684,7 @@ module Bro
       @owner = nil
       cursor.visit_children do |cursor, parent|
         case cursor.kind
-        when :cursor_unexposed_expr
+        when :cursor_unexposed_expr, 417
         	# ignored
         when :cursor_obj_c_protocol_ref
           @opaque = @name == cursor.spelling
@@ -736,7 +736,7 @@ module Bro
       @owner = nil
       cursor.visit_children do |cursor, parent|
         case cursor.kind
-        when :cursor_unexposed_expr
+        when :cursor_unexposed_expr, :cursor_template_type_parameter
         	# ignored
         when :cursor_obj_c_class_ref
           @owner = cursor.spelling
@@ -1286,7 +1286,7 @@ module Bro
       
       cursor.visit_children do |cursor, parent|
         case cursor.kind
-        when :cursor_type_ref, :cursor_integer_literal, :cursor_asm_label_attr, :cursor_obj_c_class_ref, :cursor_obj_c_protocol_ref, :cursor_unexposed_expr, :cursor_struct
+        when :cursor_type_ref, :cursor_integer_literal, :cursor_asm_label_attr, :cursor_obj_c_class_ref, :cursor_obj_c_protocol_ref, :cursor_unexposed_expr, :cursor_struct, 417
           # Ignored
         when :cursor_unexposed_attr
           attribute = Bro::parse_attribute(cursor)
