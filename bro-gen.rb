@@ -2377,9 +2377,13 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
 end
 
 $mac_version = nil
-$ios_version = '8.4'
+$ios_version = '10.0'
 xcode_dir = `xcode-select -p`.chomp
 sysroot = "#{xcode_dir}/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS#{$ios_version}.sdk"
+
+if (!File.exist?(sysroot))
+  sysroot = "#{xcode_dir}/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
+end
 
 script_dir = File.expand_path(File.dirname(__FILE__))
 target_dir = ARGV[0]
