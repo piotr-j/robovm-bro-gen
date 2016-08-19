@@ -2421,8 +2421,13 @@ ARGV[1..-1].each do |yaml_file|
 
     conf = global.merge conf
     conf['typedefs'] = (global['typedefs'] || {}).merge(conf['typedefs'] || {}).merge(conf['private_typedefs'] || {})
+    
     if conf['header_root']
         header_root = File.expand_path(File.dirname(yaml_file)) + conf['header_root']
+    elsif File.exist?(File.expand_path(File.dirname(yaml_file)) + "/../robopods/META-INF/robovm/ios/libs") # RoboPods Framework
+        header_root = File.expand_path(File.dirname(yaml_file)) + "/../robopods/META-INF/robovm/ios/libs"
+    elsif File.exist?(File.expand_path(File.dirname(yaml_file)) + "/#{conf['framework']}.lib") # RoboPods Library
+        header_root = File.expand_path(File.dirname(yaml_file)) + "/#{conf['framework']}.lib" ##### TODO test???
     else
         header_root = sysroot
     end
@@ -2442,7 +2447,18 @@ ARGV[1..-1].each do |yaml_file|
     imports += (conf['imports'] || [])
 
     (conf['include'] || []).each do |f|
-        f = Pathname.new(yaml_file).parent + f
+        if (!f.include?('.'))
+            ['robovm', 'mobi-robovm', 'mobirobovm'].each do |robovm_folder|
+                file_name = "#{script_dir}/../#{robovm_folder}/compiler/cocoatouch/src/main/bro-gen/#{f}.yaml"
+                if (File.exist?(file_name))
+                    f = file_name
+                    break
+                end
+            end
+        else
+            f = Pathname.new(yaml_file).parent + f
+        end
+        
         c = YAML.load_file(f)
         # Excluded all classes in included config
         c_classes = (c['classes'] || {}).each_with_object({}) { |(k, v), h| v ||= {}; v['exclude'] = true; h[k] = v; h }
@@ -2469,10 +2485,12 @@ ARGV[1..-1].each do |yaml_file|
     clang_args = ['-arch', 'arm64', '-mthumb', '-miphoneos-version-min', '7.0', '-fblocks', '-isysroot', sysroot]
     headers[1..-1].each do |e|
         clang_args.push('-include')
-        clang_args.push("#{header_root}#{e}")
+        clang_args.push(File.join(header_root, e))
     end
+    
+    clang_args << "-F#{header_root}" if header_root != sysroot
     clang_args += conf['clang_args'] if conf['clang_args']
-    translation_unit = index.parse_translation_unit("#{header_root}#{headers[0]}", clang_args, [], detailed_preprocessing_record: true)
+    translation_unit = index.parse_translation_unit(File.join(header_root, headers[0]), clang_args, [], detailed_preprocessing_record: true)
 
     model = Bro::Model.new conf
     model.process(translation_unit.cursor)
