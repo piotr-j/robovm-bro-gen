@@ -2007,10 +2007,26 @@ def load_template(dir, package, name, def_template)
     File.size?(f) ? IO.read(f) : def_template
 end
 
+$LICENSE_HEADER
+
+def get_license_header()
+    f = File.join(File.dirname(__FILE__), 'LICENSE.txt')
+    
+    if ($LICENSE_HEADER.nil?)
+        $LICENSE_HEADER = "/*\n"
+        IO.foreach(f) do |line|
+            $LICENSE_HEADER += " * #{line}"
+        end
+        $LICENSE_HEADER += "\n */"
+    end
+    $LICENSE_HEADER
+end
+
 def merge_template(dir, package, name, def_template, data)
     template = load_template(dir, package, name, def_template)
     unless package.empty?
         template = template.sub(/^package .*;/, "package #{package};")
+        template = template.sub(/^__LICENSE__/, get_license_header())
     end
     data.each do |key, value|
         value ||= ''
@@ -2385,12 +2401,13 @@ end
 
 script_dir = File.expand_path(File.dirname(__FILE__))
 target_dir = ARGV[0]
-def_class_template = IO.read("#{script_dir}/class_template.java")
-def_enum_template = IO.read("#{script_dir}/enum_template.java")
-def_bits_template = IO.read("#{script_dir}/bits_template.java")
-def_protocol_template = IO.read("#{script_dir}/protocol_template.java")
-def_value_enum_template = IO.read("#{script_dir}/value_enum_template.java")
-def_value_dictionary_template = IO.read("#{script_dir}/value_dictionary_template.java")
+templates_dir = script_dir + '/templates'
+def_class_template = IO.read("#{templates_dir}/class_template.java")
+def_enum_template = IO.read("#{templates_dir}/enum_template.java")
+def_bits_template = IO.read("#{templates_dir}/bits_template.java")
+def_protocol_template = IO.read("#{templates_dir}/protocol_template.java")
+def_value_enum_template = IO.read("#{templates_dir}/value_enum_template.java")
+def_value_dictionary_template = IO.read("#{templates_dir}/value_dictionary_template.java")
 global = YAML.load_file("#{script_dir}/global.yaml")
 
 ARGV[1..-1].each do |yaml_file|
