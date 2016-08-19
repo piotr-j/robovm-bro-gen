@@ -1584,6 +1584,7 @@ module Bro
             elsif type.kind == :type_obj_c_object_pointer
                 name = type.pointee.spelling
                 name = name.gsub(/\s*\bconst\b\s*/, '')
+
                 if name =~ /^(id|NSObject)<(.*)>$/
                     # Protocols
                     names = Regexp.last_match(2).split(/\s*,/)
@@ -1597,8 +1598,14 @@ module Bro
                     end
                 elsif name =~ /^(Class)<(.*)>$/
                     resolve_type_by_name('ObjCClass')
+                elsif name =~ /(.*)<(.*)>/ # Generic type
+                    type_name = $1
+                    generic_type = $2
+                    
+                    e = resolve_type_by_name(type_name)
+                    e && e.pointer
                 else
-                    e = @objc_classes.find { |e| e.name == name }
+                    e = resolve_type_by_name(name)
                     e && e.pointer
                 end
             elsif type.kind == :type_enum
