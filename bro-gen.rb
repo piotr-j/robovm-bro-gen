@@ -2359,9 +2359,9 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
             visibility = 'private'
         end
         
-        treat_as_constructor = !conf['constructor'].nil? && conf['constructor'] == true
+        static_constructor = !conf['constructor'].nil? && conf['constructor'] == true && is_static
         
-        if (is_static && treat_as_constructor) 
+        if (is_static && static_constructor) 
             ret_type[0] = "@Pointer long"
             visibility = 'protected'
         end
@@ -2381,7 +2381,7 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
             body = " { #{ret_type[0] != 'void' ? 'return ' : ''}#{name}(#{args_s}); }"
         end
         method_lines.push("#{[visibility, static, native, ret_marshaler, ret_anno, generics_s, ret_type[0], name].find_all { |e| !e.empty? }.join(' ')}(#{parameters_s})#{body}")
-        if owner.is_a?(Bro::ObjCClass) && conf['constructor'] != false && (is_init?(owner, method) || is_static)
+        if owner.is_a?(Bro::ObjCClass) && conf['constructor'] != false && (is_init?(owner, method) || static_constructor)
             constructor_visibility = conf['constructor_visibility'] || 'public'
             args_s = param_types.map { |p| p[2] }.join(', ')
 
@@ -2400,7 +2400,7 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
                 else
                     constructor_lines << "#{constructor_visibility}#{!generics_s.empty? ? ' ' + generics_s : ''} #{owner_name}(#{parameters_s}) { super((SkipInit) null); initObject(#{name}(#{args_s})); }"
                 end
-            elsif (is_static && treat_as_constructor)
+            elsif (static_constructor)
                 if conf['throws']
                     ### TODO ???
                 else
