@@ -2224,7 +2224,7 @@ def property_to_java(model, owner, prop, props_conf, seen, adapter = false)
             else
                 lines << "@Property(selector = \"#{prop.setter_name}\")"
             end
-            marshaler = marshaler.to_s if marshaler != ''
+            marshaler = marshaler + ' ' if marshaler != ''
 
             lines << "#{[visibility, static, native, generics_s, 'void', setter].find_all { |e| !e.empty? }.join(' ')}(#{marshaler}#{parameters_s})#{body}"
             seen["-#{prop.setter_name}"] = true
