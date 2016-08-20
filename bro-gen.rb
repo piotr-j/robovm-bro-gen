@@ -1291,7 +1291,7 @@ module Bro
 
             cursor.visit_children do |cursor, _parent|
                 case cursor.kind
-                when :cursor_type_ref, :cursor_integer_literal, :cursor_asm_label_attr, :cursor_obj_c_class_ref, :cursor_obj_c_protocol_ref, :cursor_unexposed_expr, :cursor_struct, 417
+                when :cursor_type_ref, :cursor_integer_literal, :cursor_asm_label_attr, :cursor_obj_c_class_ref, :cursor_obj_c_protocol_ref, :cursor_unexposed_expr, :cursor_struct, :cursor_init_list_expr, 417
                 # Ignored
                 when :cursor_unexposed_attr
                     attribute = Bro.parse_attribute(cursor)
@@ -1329,10 +1329,6 @@ module Bro
                             'double'
                         end
             end
-
-            #  if @type == "long" && @value == "-1L"
-            #    # We assume NSUIntegerMax
-            #    @value = "Bro.IS_32BIT ? 0xffffffffL : 0xffffffffffffffffL"
 
             if @type == 'long' && @value == '9223372036854775807L'
                 # We assume NSIntegerMax
