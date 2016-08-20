@@ -2288,10 +2288,12 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
                      ''
         native = owner.is_a?(Bro::ObjCProtocol) && !model.get_protocol_conf(owner.name)['class'] ||
             (owner.is_a?(Bro::ObjCCategory) && method.is_a?(Bro::ObjCClassMethod)) ? '' : (adapter ? '' : 'native')
-        static = method.is_a?(Bro::ObjCClassMethod) || owner.is_a?(Bro::ObjCCategory) ? 'static' : ''
+        is_static = method.is_a?(Bro::ObjCClassMethod) || owner.is_a?(Bro::ObjCCategory)
+        static = is_static ? 'static' : ''
 
         generics_s = ([ret_type] + param_types).map { |e| e[1] }.find_all { |e| e }.join(', ')
         generics_s = !generics_s.empty? ? "<#{generics_s}>" : ''
+        
         if owner.is_a?(Bro::ObjCCategory)
             if method.is_a?(Bro::ObjCInstanceMethod)
                 cconf = model.get_category_conf(owner.owner)
@@ -2355,6 +2357,13 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
 
             visibility = 'private'
         end
+        
+        treat_as_constructor = !conf['constructor'].nil? && conf['constructor'] == true
+        
+        if (is_static && treat_as_constructor) 
+            ret_type[0] = "@Pointer long"
+            visibility = 'protected'
+        end
 
         model.push_availability(method, method_lines)
         method_lines << annotations.to_s if annotations
@@ -2371,23 +2380,31 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
             body = " { #{ret_type[0] != 'void' ? 'return ' : ''}#{name}(#{args_s}); }"
         end
         method_lines.push("#{[visibility, static, native, ret_marshaler, ret_anno, generics_s, ret_type[0], name].find_all { |e| !e.empty? }.join(' ')}(#{parameters_s})#{body}")
-        if owner.is_a?(Bro::ObjCClass) && is_init?(owner, method) && conf['constructor'] != false
+        if owner.is_a?(Bro::ObjCClass) && conf['constructor'] != false && (is_init?(owner, method) || is_static)
             constructor_visibility = conf['constructor_visibility'] || 'public'
             args_s = param_types.map { |p| p[2] }.join(', ')
 
             model.push_availability(method, constructor_lines)
             constructor_lines << annotations.to_s if annotations
-
-            if conf['throws']
-                constructor_lines << "#{constructor_visibility}#{!generics_s.empty? ? ' ' + generics_s : ''} #{owner_name}(#{new_parameters_s}) throws #{conf['throws']} {"
-                constructor_lines << '   super((SkipInit) null);'
-                constructor_lines << "   #{error_type}.#{error_type}Ptr ptr = new #{error_type}.#{error_type}Ptr();"
-                constructor_lines << "   long handle = #{name}(#{params_s});"
-                constructor_lines << "   if (ptr.get() != null) { throw new #{conf['throws']}(ptr.get()); }"
-                constructor_lines << '   initObject(handle);'
-                constructor_lines << '}'
-            else
-                constructor_lines << "#{constructor_visibility}#{!generics_s.empty? ? ' ' + generics_s : ''} #{owner_name}(#{parameters_s}) { super((SkipInit) null); initObject(#{name}(#{args_s})); }"
+            
+            if (is_init?(owner, method))
+                if conf['throws']
+                    constructor_lines << "#{constructor_visibility}#{!generics_s.empty? ? ' ' + generics_s : ''} #{owner_name}(#{new_parameters_s}) throws #{conf['throws']} {"
+                    constructor_lines << "   super((SkipInit) null);"
+                    constructor_lines << "   #{error_type}.#{error_type}Ptr ptr = new #{error_type}.#{error_type}Ptr();"
+                    constructor_lines << "   long handle = #{name}(#{params_s});"
+                    constructor_lines << "   if (ptr.get() != null) { throw new #{conf['throws']}(ptr.get()); }"
+                    constructor_lines << "   initObject(handle);"
+                    constructor_lines << "}"
+                else
+                    constructor_lines << "#{constructor_visibility}#{!generics_s.empty? ? ' ' + generics_s : ''} #{owner_name}(#{parameters_s}) { super((SkipInit) null); initObject(#{name}(#{args_s})); }"
+                end
+            elsif (is_static && treat_as_constructor)
+                if conf['throws']
+                    ### TODO ???
+                else
+                    constructor_lines << "#{constructor_visibility}#{generics_s.size>0 ? ' ' + generics_s : ''} #{owner_name}(#{parameters_s}) { super(#{name}(#{args_s})); retain(getHandle()); }"
+                end
             end
         end
         seen[full_name] = true
