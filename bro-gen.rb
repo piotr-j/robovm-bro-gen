@@ -976,6 +976,7 @@ module Bro
                 lines << "public #{@name} #{setter}(#{type} #{param_name}) {"
                 lines << convenience_setter
                 lines << '    return this;'
+                lines << '}'
                 lines
             end
         end
