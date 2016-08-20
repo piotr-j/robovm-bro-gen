@@ -2437,6 +2437,8 @@ global = YAML.load_file("#{script_dir}/global.yaml")
 ARGV[1..-1].each do |yaml_file|
     puts "Processing #{yaml_file}..."
     conf = YAML.load_file(yaml_file)
+    
+    framework = conf['framework']
 
     headers = []
     headers.push(conf['header']) if conf['header']
@@ -2447,13 +2449,17 @@ ARGV[1..-1].each do |yaml_file|
     conf['typedefs'] = (global['typedefs'] || {}).merge(conf['typedefs'] || {}).merge(conf['private_typedefs'] || {})
     
     if conf['header_root']
-        header_root = File.expand_path(File.dirname(yaml_file)) + conf['header_root']
-    elsif File.exist?(File.expand_path(File.dirname(yaml_file)) + "/../robopods/META-INF/robovm/ios/libs") # RoboPods Framework
-        header_root = File.expand_path(File.dirname(yaml_file)) + "/../robopods/META-INF/robovm/ios/libs"
-    elsif File.exist?(File.expand_path(File.dirname(yaml_file)) + "/#{conf['framework']}.lib") # RoboPods Library
-        header_root = File.expand_path(File.dirname(yaml_file)) + "/#{conf['framework']}.lib" ##### TODO test???
+        framework_root = File.expand_path(File.dirname(yaml_file)) + conf['header_root']
+        header_root = framework_root
+    elsif File.exist?(File.expand_path(File.dirname(yaml_file)) + "/#{framework}.lib/Headers") # RoboPods Library
+        framework_root = File.expand_path(File.dirname(yaml_file))
+        header_root = framework_root + "/#{framework}.lib/Headers"
+    elsif File.exist?(File.expand_path(File.dirname(yaml_file)) + "/../robopods/META-INF/robovm/ios/libs/#{framework}.framework/Headers") # RoboPods Framework
+        framework_root = File.expand_path(File.dirname(yaml_file)) + "/../robopods/META-INF/robovm/ios/libs"
+        header_root = framework_root + "/#{framework}.framework/Headers"
     else
-        header_root = sysroot
+        framework_root = sysroot
+        header_root = framework_root
     end
 
     imports = []
@@ -2512,7 +2518,7 @@ ARGV[1..-1].each do |yaml_file|
         clang_args.push(File.join(header_root, e))
     end
     
-    clang_args << "-F#{header_root}" if header_root != sysroot
+    clang_args << "-F#{framework_root}" if framework_root != sysroot
     clang_args += conf['clang_args'] if conf['clang_args']
     translation_unit = index.parse_translation_unit(File.join(header_root, headers[0]), clang_args, [], detailed_preprocessing_record: true)
 
