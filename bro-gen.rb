@@ -71,7 +71,7 @@ module Bro
     end
 
     class Entity
-        @@deprecated_version = 5
+        @@deprecated_version = 6
 
         attr_accessor :id, :location, :name, :framework, :attributes
         def initialize(model, cursor)
