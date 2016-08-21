@@ -1595,7 +1595,7 @@ module Bro
                     end
                 elsif name =~ /^(Class)<(.*)>$/
                     resolve_type_by_name('ObjCClass')
-                elsif name =~ /(.*)<(.*)>/ # Generic type
+                elsif name =~ /(.*?)<(.*)>/ # Generic type
                     type_name = $1
                     generic_type = $2
                     
