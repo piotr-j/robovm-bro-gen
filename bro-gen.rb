@@ -304,7 +304,15 @@ module Bro
             @ios_dep_version = nil
             args = args.map { |e| e.sub(/^[A-Z_]+/, '') }
             args = args.map { |e| e.tr('_', '.') }
-            if source =~ /_AVAILABLE_IOS\s*\(/
+            if source =~ /API_AVAILABLE\s*\(/
+                args.each do |v|
+                    if v =~ /ios\((.*)\)/
+                        @ios_version = $1
+                    elsif v =~ /macosx\((.*)\)/
+                        @mac_version = $1
+                    end
+                end
+            elsif source =~ /_AVAILABLE_IOS\s*\(/
                 @ios_version = args[0]
             elsif source =~ /_AVAILABLE_MAC\s*\(/
                 @mac_version = args[0]
@@ -360,9 +368,10 @@ module Bro
            source == 'NS_ROOT_CLASS' || source == '__header_always_inline' || source.end_with?('_EXTERN') || source.end_with?('_EXTERN_CLASS') || source == 'NSObject' ||
            source.end_with?('_CLASS_EXPORT') || source.end_with?('_EXPORT') || source == 'NS_REPLACES_RECEIVER' || source == '__objc_exception__' || source == 'OBJC_EXPORT' ||
            source == 'OBJC_ROOT_CLASS' || source == '__ai' || source.end_with?('_EXTERN_WEAK') || source == 'NS_DESIGNATED_INITIALIZER' || source.start_with?('NS_EXTENSION_UNAVAILABLE_IOS') ||
-           source == 'NS_REQUIRES_PROPERTY_DEFINITIONS' || source.start_with?('DEPRECATED_MSG_ATTRIBUTE')
+           source == 'NS_REQUIRES_PROPERTY_DEFINITIONS' || source.start_with?('DEPRECATED_MSG_ATTRIBUTE') || source == 'NS_REFINED_FOR_SWIFT' || source.start_with?('NS_SWIFT_NAME') ||
+           source == '__WATCHOS_PROHIBITED'
             return IgnoredAttribute.new source
-        elsif source == 'NS_UNAVAILABLE' || source == 'UNAVAILABLE_ATTRIBUTE'
+        elsif source == 'NS_UNAVAILABLE' || source == 'UNAVAILABLE_ATTRIBUTE' || source.match(/API_UNAVAILABLE\(.*ios/) # TODO should differ between platforms?
             return UnavailableAttribute.new source
         elsif source.match(/_AVAILABLE/) || source.match(/_DEPRECATED/) ||
               source.match(/_AVAILABLE_STARTING/) || source.match(/_AVAILABLE_BUT_DEPRECATED/)
