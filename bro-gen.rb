@@ -369,9 +369,9 @@ module Bro
            source.end_with?('_CLASS_EXPORT') || source.end_with?('_EXPORT') || source == 'NS_REPLACES_RECEIVER' || source == '__objc_exception__' || source == 'OBJC_EXPORT' ||
            source == 'OBJC_ROOT_CLASS' || source == '__ai' || source.end_with?('_EXTERN_WEAK') || source == 'NS_DESIGNATED_INITIALIZER' || source.start_with?('NS_EXTENSION_UNAVAILABLE_IOS') ||
            source == 'NS_REQUIRES_PROPERTY_DEFINITIONS' || source.start_with?('DEPRECATED_MSG_ATTRIBUTE') || source == 'NS_REFINED_FOR_SWIFT' || source.start_with?('NS_SWIFT_NAME') ||
-           source == '__WATCHOS_PROHIBITED'
+           source == '__WATCHOS_PROHIBITED' || source.start_with?('NS_SWIFT_UNAVAILABLE') || (source.start_with?('API_UNAVAILABLE') && !source.include?('ios'))
             return IgnoredAttribute.new source
-        elsif source == 'NS_UNAVAILABLE' || source == 'UNAVAILABLE_ATTRIBUTE' || source.match(/API_UNAVAILABLE\(.*ios/) # TODO should differ between platforms?
+        elsif source == 'NS_UNAVAILABLE' || source.start_with?('OBJC_UNAVAILABLE') || source.start_with?('OBJC_SWIFT_UNAVAILABLE') || source == 'UNAVAILABLE_ATTRIBUTE' || source.match(/API_UNAVAILABLE\(.*ios/) # TODO should differ between platforms?
             return UnavailableAttribute.new source
         elsif source.match(/_AVAILABLE/) || source.match(/_DEPRECATED/) ||
               source.match(/_AVAILABLE_STARTING/) || source.match(/_AVAILABLE_BUT_DEPRECATED/)
@@ -561,6 +561,13 @@ module Bro
     class ObjCClassMethod < ObjCMethod
         def initialize(model, cursor, owner)
             super(model, cursor, owner)
+            
+            s = Bro.read_source_range(cursor.extent)
+            @class_property = !s.include?('+') # class properties are also recognized as class methods
+        end
+        
+        def is_class_property?
+            @class_property
         end
     end
 
@@ -604,6 +611,10 @@ module Bro
         def setter_name
             base = @name[0, 1].upcase + @name[1..-1]
             @attrs['setter'] || "set#{base}:"
+        end
+        
+        def is_static?
+            @attrs['class']
         end
 
         def is_readonly?
@@ -2180,7 +2191,7 @@ def property_to_java(model, owner, prop, props_conf, seen, adapter = false)
                      owner.is_a?(Bro::ObjCProtocol) && model.get_protocol_conf(owner.name)['class'] && 'public' ||
                      ''
         native = owner.is_a?(Bro::ObjCProtocol) && !model.get_protocol_conf(owner.name)['class'] ? '' : (adapter ? '' : 'native')
-        static = owner.is_a?(Bro::ObjCCategory) ? 'static' : ''
+        static = owner.is_a?(Bro::ObjCCategory) || prop.is_static? ? 'static' : ''
         generics_s = [type].map { |e| e[1] }.find_all { |e| e }.join(', ')
         generics_s = !generics_s.empty? ? "<#{generics_s}>" : ''
         param_types = []
@@ -2254,6 +2265,8 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
     conf = model.get_conf_for_key(full_name, methods_conf) || {}
 
     return [[], []] if adapter && conf['skip_adapter']
+    
+    return [[], []] if method.is_a?(Bro::ObjCClassMethod) && method.is_class_property?
 
     if seen[full_name]
         [[], []]
@@ -2518,7 +2531,8 @@ ARGV[1..-1].each do |yaml_file|
     imports_s = "\n" + imports.map { |im| "import #{im};" }.join("\n") + "\n"
 
     index = FFI::Clang::Index.new
-    clang_args = ['-arch', 'arm64', '-mthumb', '-miphoneos-version-min', '7.0', '-fblocks', '-isysroot', sysroot]
+    clang_args = ['-arch', 'arm64', '-mthumb', '-miphoneos-version-min', $ios_version, '-fblocks', '-isysroot', sysroot]
+    
     headers[1..-1].each do |e|
         clang_args.push('-include')
         clang_args.push(File.join(header_root, e))
