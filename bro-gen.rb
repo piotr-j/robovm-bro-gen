@@ -1573,7 +1573,12 @@ module Bro
             name = type.spelling
             name = name.gsub(/\s*\bconst\b\s*/, '')
             name = name.sub(/^(struct|union|enum)\s*/, '')
-            if @conf_typedefs[name]
+            
+            gen_name = name !~ /^(id|NSObject)<.*>$/ ? name.gsub(/<.*>/, '').sub(/ *_(nonnull|nullable|null_unspecified) /i, '') : name
+            
+            if @conf_typedefs[gen_name] # Try to lookup the type without generics
+                resolve_type_by_name gen_name
+            elsif @conf_typedefs[name]
                 resolve_type_by_name name
             elsif type.kind == :type_pointer
                 if type.pointee.kind == :type_unexposed && name.match(/\(\*\)/)
@@ -2146,7 +2151,7 @@ end
 
 def get_generic_type(model, owner, method, type, index, conf_type, name = nil)
     if conf_type
-        conf_type =~ /<\s*([A-Z0-9])+\s+>/ ? [Regexp.last_match(1), conf_type, name, nil] : [conf_type, nil, name, nil]
+        conf_type =~ /<\s*([A-Z0-9])+\s+>/ ? [$1, conf_type, name, nil] : [conf_type, nil, name, nil]
     else
         if is_init?(owner, method) && index.zero?
             # init method return type should always be '@Pointer long'
@@ -2288,7 +2293,6 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
         name = conf['name']
         unless name
             name = method.name.tr(':', '$')
-            # name = name.sub(/\$$/, '')
             if method.parameters.empty? && method.return_type.kind != :type_void && conf['property']
                 base = name[0, 1].upcase + name[1..-1]
                 name = ret_type[0] == 'boolean' ? "is#{base}" : "get#{base}"
