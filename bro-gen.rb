@@ -1622,10 +1622,16 @@ module Bro
                     resolve_type_by_name('ObjCClass')
                 elsif name =~ /(.*?)<(.*)>/ # Generic type
                     type_name = $1
-                    generic_type = $2
+                    generic_name = $2
                     
                     e = resolve_type_by_name(type_name)
-                    e && e.pointer
+                    generic_type = resolve_type_by_name(generic_name) unless generic_name.include?('NSString')
+                    
+                    if generic_type && e && e.pointer
+                        [e, generic_type]
+                    else
+                        e && e.pointer
+                    end
                 else
                     e = resolve_type_by_name(name)
                     e && e.pointer
@@ -1793,6 +1799,8 @@ module Bro
                 "@ByVal #{type.java_name}"
             elsif type.is_a?(Array)
                 "@Array({#{type.dimensions.join(', ')}}) #{type.java_name}"
+            elsif type.respond_to?('each') # Generic type
+                "#{type[0].java_name}<#{type[1].java_name}>"
             else
                 type.java_name
              end
