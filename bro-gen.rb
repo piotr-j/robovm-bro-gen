@@ -1576,7 +1576,7 @@ module Bro
             
             gen_name = name !~ /^(id|NSObject)<.*>$/ ? name.gsub(/<.*>/, '').sub(/ *_(nonnull|nullable|null_unspecified) /i, '') : name
             
-            if @conf_typedefs[gen_name] # Try to lookup the type without generics
+            if type.kind != :type_obj_c_object_pointer && @conf_typedefs[gen_name] # Try to lookup typedefs without generics
                 resolve_type_by_name gen_name
             elsif @conf_typedefs[name]
                 resolve_type_by_name name
@@ -1622,15 +1622,23 @@ module Bro
                     resolve_type_by_name('ObjCClass')
                 elsif name =~ /(.*?)<(.*)>/ # Generic type
                     type_name = $1
-                    generic_name = $2
+                    generic_name = $2.tr('* ', '')
+                    
+                    resolve_generic = ['NSString', 'NSObject', 'KeyType', 'ObjectType', 'Class', ',', '<', '>'].all? { |n| !generic_name.include? n }
                     
                     e = resolve_type_by_name(type_name)
-                    generic_type = resolve_type_by_name(generic_name) unless generic_name.include?('NSString')
+                    generic_type = resolve_type_by_name(generic_name) if resolve_generic
                     
-                    if generic_type && e && e.pointer
+                    resolve_generic &= generic_type.is_a?(ObjCClass) || generic_type.is_a?(Typedef) || generic_type.is_a?(Builtin)
+                    
+                    if resolve_generic && generic_type && e && e.pointer
                         [e, generic_type]
                     else
-                        e && e.pointer
+                        if @conf_typedefs[gen_name]
+                            resolve_type_by_name gen_name
+                        else
+                            e && e.pointer
+                        end
                     end
                 else
                     e = resolve_type_by_name(name)
@@ -3216,6 +3224,9 @@ ARGV[1..-1].each do |yaml_file|
         if owner.is_a?(Bro::ObjCClass)
             unless c['skip_skip_init_constructor']
                 constructors_lines.unshift("protected #{owner_name}(SkipInit skipInit) { super(skipInit); }")
+            end
+            if c['skip_handle_constructor'] == false
+                constructors_lines.unshift("protected #{owner_name}(long handle) { super(handle); }")
             end
             unless c['skip_def_constructor']
                 constructors_lines.unshift("public #{owner_name}() {}")
