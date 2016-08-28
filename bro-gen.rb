@@ -39,6 +39,16 @@ class String
     def underscore!
         replace(scan(/[A-Z][a-z]*/).join('_').downcase)
     end
+    
+    def upcase_first
+        self[0] = self[0].upcase
+        self
+    end
+    
+    def downcase_first
+        self[0] = self[0].downcase
+        self
+    end
 end
 
 module Bro
@@ -371,7 +381,7 @@ module Bro
            source == 'NS_REQUIRES_PROPERTY_DEFINITIONS' || source.start_with?('DEPRECATED_MSG_ATTRIBUTE') || source == 'NS_REFINED_FOR_SWIFT' || source.start_with?('NS_SWIFT_NAME') ||
            source == '__WATCHOS_PROHIBITED' || source.start_with?('NS_SWIFT_UNAVAILABLE') || (source.start_with?('API_UNAVAILABLE') && !source.include?('ios'))
             return IgnoredAttribute.new source
-        elsif source == 'NS_UNAVAILABLE' || source.start_with?('OBJC_UNAVAILABLE') || source.start_with?('OBJC_SWIFT_UNAVAILABLE') || source == 'UNAVAILABLE_ATTRIBUTE' || source.match(/API_UNAVAILABLE\(.*ios/) # TODO should differ between platforms?
+        elsif source == 'NS_UNAVAILABLE' || source == '__unavailable' || source.start_with?('OBJC_UNAVAILABLE') || source.start_with?('OBJC_SWIFT_UNAVAILABLE') || source == 'UNAVAILABLE_ATTRIBUTE' || source.match(/API_UNAVAILABLE\(.*ios/) # TODO should differ between platforms?
             return UnavailableAttribute.new source
         elsif source.match(/_AVAILABLE/) || source.match(/_DEPRECATED/) ||
               source.match(/_AVAILABLE_STARTING/) || source.match(/_AVAILABLE_BUT_DEPRECATED/)
@@ -1311,7 +1321,7 @@ module Bro
 
             cursor.visit_children do |cursor, _parent|
                 case cursor.kind
-                when :cursor_type_ref, :cursor_integer_literal, :cursor_asm_label_attr, :cursor_obj_c_class_ref, :cursor_obj_c_protocol_ref, :cursor_unexposed_expr, :cursor_struct, :cursor_init_list_expr, 417
+                when :cursor_type_ref, :cursor_integer_literal, :cursor_asm_label_attr, :cursor_obj_c_class_ref, :cursor_obj_c_protocol_ref, :cursor_unexposed_expr, :cursor_struct, :cursor_init_list_expr, :cursor_c_style_cast_expr, :cursor_floating_literal, 417
                 # Ignored
                 when :cursor_unexposed_attr
                     attribute = Bro.parse_attribute(cursor)
@@ -2158,10 +2168,13 @@ def opaque_to_java(_model, data, name, conf)
 end
 
 def is_init?(owner, method)
-    owner.is_a?(Bro::ObjCClass) && method.is_a?(Bro::ObjCInstanceMethod) &&
-        method.name.start_with?('init') &&
+    owner.is_a?(Bro::ObjCClass) && is_method_like_init?(owner, method)
+end
+
+def is_method_like_init?(owner, method)
+    method.is_a?(Bro::ObjCInstanceMethod) && method.name.start_with?('init') &&
         (method.return_type.spelling == 'id' ||
-         method.return_type.spelling == 'instancetype' ||
+         method.return_type.spelling =~ /instancetype/ ||
          method.return_type.spelling == "#{owner.name} *")
 end
 
@@ -2277,7 +2290,9 @@ def property_to_java(model, owner, prop, props_conf, seen, adapter = false)
 end
 
 def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter = false)
-    return [[], []] if method.is_outdated?
+    return [[], []] if method.is_outdated? || method.is_a?(Bro::ObjCClassMethod) && owner.is_a?(Bro::ObjCProtocol)
+
+    return [[], []] if owner.is_a?(Bro::ObjCProtocol) && is_method_like_init?(owner, method)
 
     full_name = (method.is_a?(Bro::ObjCClassMethod) ? '+' : '-') + method.name
 
