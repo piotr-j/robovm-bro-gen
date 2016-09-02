@@ -2457,7 +2457,7 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
                 if conf['throws']
                     ### TODO ???
                 else
-                    constructor_lines << "#{constructor_visibility}#{generics_s.size>0 ? ' ' + generics_s : ''} #{owner_name}(#{parameters_s}) { super(#{name}(#{args_s})); retain(getHandle()); }"
+                    constructor_lines << "#{constructor_visibility}#{generics_s.size>0 ? ' ' + generics_s : ''} #{owner_name}(#{parameters_s}) { super((Handle) null, #{name}(#{args_s})); retain(getHandle()); }"
                 end
             end
         end
@@ -3240,8 +3240,11 @@ ARGV[1..-1].each do |yaml_file|
             unless c['skip_skip_init_constructor']
                 constructors_lines.unshift("protected #{owner_name}(SkipInit skipInit) { super(skipInit); }")
             end
+            unless c['skip_skip_init_constructor']
+                constructors_lines.unshift("protected #{owner_name}(Handle h, long handle) { super(h, handle); }")
+            end
             if c['skip_handle_constructor'] == false
-                constructors_lines.unshift("protected #{owner_name}(long handle) { super(handle); }")
+                constructors_lines.unshift("@Deprecated protected #{owner_name}(long handle) { super(handle); }")
             end
             unless c['skip_def_constructor']
                 constructors_lines.unshift("public #{owner_name}() {}")
