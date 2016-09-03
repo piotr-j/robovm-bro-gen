@@ -379,9 +379,10 @@ module Bro
            source.end_with?('_CLASS_EXPORT') || source.end_with?('_EXPORT') || source == 'NS_REPLACES_RECEIVER' || source == '__objc_exception__' || source == 'OBJC_EXPORT' ||
            source == 'OBJC_ROOT_CLASS' || source == '__ai' || source.end_with?('_EXTERN_WEAK') || source == 'NS_DESIGNATED_INITIALIZER' || source.start_with?('NS_EXTENSION_UNAVAILABLE_IOS') ||
            source == 'NS_REQUIRES_PROPERTY_DEFINITIONS' || source.start_with?('DEPRECATED_MSG_ATTRIBUTE') || source == 'NS_REFINED_FOR_SWIFT' || source.start_with?('NS_SWIFT_NAME') ||
-           source == '__WATCHOS_PROHIBITED' || source.start_with?('NS_SWIFT_UNAVAILABLE') || (source.start_with?('API_UNAVAILABLE') && !source.include?('ios'))
+           source == '__WATCHOS_PROHIBITED' || source == '__TVOS_PROHIBITED' || source.start_with?('NS_SWIFT_UNAVAILABLE') || (source.start_with?('API_UNAVAILABLE') && !source.include?('ios')) ||
+           source == 'UI_APPEARANCE_SELECTOR' || source == 'CF_RETURNS_NOT_RETAINED' || source == 'NS_REQUIRES_SUPER'
             return IgnoredAttribute.new source
-        elsif source == 'NS_UNAVAILABLE' || source == '__unavailable' || source.start_with?('OBJC_UNAVAILABLE') || source.start_with?('OBJC_SWIFT_UNAVAILABLE') || source == 'UNAVAILABLE_ATTRIBUTE' || source.match(/API_UNAVAILABLE\(.*ios/) # TODO should differ between platforms?
+        elsif source == 'NS_UNAVAILABLE' || source == '__unavailable' || source.start_with?('OBJC_UNAVAILABLE') || source.start_with?('OBJC_SWIFT_UNAVAILABLE') || source == 'UNAVAILABLE_ATTRIBUTE' || source == '__IOS_PROHIBITED' || source.match(/API_UNAVAILABLE\(.*ios/) # TODO should differ between platforms?
             return UnavailableAttribute.new source
         elsif source.match(/_AVAILABLE/) || source.match(/_DEPRECATED/) ||
               source.match(/_AVAILABLE_STARTING/) || source.match(/_AVAILABLE_BUT_DEPRECATED/)
@@ -1632,7 +1633,7 @@ module Bro
                     resolve_type_by_name('ObjCClass')
                 elsif name =~ /(.*?)<(.*)>/ # Generic type
                     type_name = $1
-                    generic_name = $2.tr('* ', '')
+                    generic_name = $2.tr('* ', '').sub(/__kindof/, '')
                     
                     resolve_generic = ['NSString', 'NSObject', 'KeyType', 'ObjectType', 'Class', ',', '<', '>'].all? { |n| !generic_name.include? n }
                     
@@ -1849,11 +1850,11 @@ module Bro
                       /^applies/, /^apportions/, /^are/, /^autoenables/, /^automatically/, /^autoresizes/,
                       /^autoreverses/, /^bounces/, /^casts/, /^checks/, /^clears/, /^clips/, /^collapses/, /^contains/, /^creates/,
                       /^defers/, /^defines/, /^delays/, /^depends/, /^did/, /^dims/, /^disconnects/, /^displays/,
-                      /^does/, /^draws/, /^embeds/, /^enables/, /^enumerates/, /^evicts/, /^expects/, /^fixes/, /^fills/, /^flattens/, /^generates/, /^groups/,
-                      /^hides/, /^ignores/, /^includes/, /^infers/, /^invalidates/, /^keeps/, /^locks/, /^marks/, /^masks/, /^merges/, /^migrates/, /^needs/,
-                      /^normalizes/, /^notifies/, /^overrides/, /^pauses/, /^performs/, /^prefers/, /^presents/, /^preserves/, /^propagates/,
-                      /^provides/, /^reads/, /^receives/, /^recognizes/, /^removes/, /^requests/, /^requires/, /^resets/, /^resumes/, /^returns/, /^reverses/,
-                      /^scrolls/, /^searches/, /^sends/, /^shows/, /^simulates/, /^sorts/, /^supports/, /^suppresses/, /^tracks/, /^uses/, /^wants/, /^writes/
+                      /^does/, /^draws/, /^embeds/, /^enables/, /^enumerates/, /^evicts/, /^expects/, /^fixes/, /^fills/, /^flattens/, /^flips/, /^generates/, /^groups/,
+                      /^hides/, /^ignores/, /^includes/, /^infers/, /^installs/, /^invalidates/, /^keeps/, /^locks/, /^marks/, /^masks/, /^merges/, /^migrates/, /^needs/,
+                      /^normalizes/, /^notifies/, /^obscures/, /^opens/, /^overrides/, /^pauses/, /^performs/, /^prefers/, /^presents/, /^preserves/, /^propagates/,
+                      /^provides/, /^reads/, /^receives/, /^recognizes/, /^remembers/, /^removes/, /^requests/, /^requires/, /^resets/, /^resumes/, /^returns/, /^reverses/,
+                      /^scrolls/, /^searches/, /^sends/, /^shows/, /^simulates/, /^sorts/, /^supports/, /^suppresses/, /^tracks/, /^translates/, /^uses/, /^wants/, /^writes/
                         getter = name
                     else
                         getter = "is#{base}"
