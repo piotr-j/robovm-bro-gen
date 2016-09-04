@@ -305,7 +305,7 @@ module Bro
         attr_accessor :mac_version, :ios_version, :mac_dep_version, :ios_dep_version
         def initialize(source)
             super(source)
-            s = source.sub(/^[A-Z_]+\s*\(/, '')
+            s = source.gsub(/^[A-Z_]+\s*\(/, '')
             s = s.sub(/\)$/, '')
             args = s.split(/\s*,\s*/)
             @mac_version = nil
@@ -322,7 +322,7 @@ module Bro
                         @mac_version = $1
                     end
                 end
-            elsif source =~ /_AVAILABLE_IOS\s*\(/
+            elsif source =~ /_AVAILABLE_IOS(_ONLY)?\s*\(/
                 @ios_version = args[0]
             elsif source =~ /_AVAILABLE_MAC\s*\(/
                 @mac_version = args[0]
@@ -592,7 +592,7 @@ module Bro
             @setter = nil
             @source = Bro.read_source_range(cursor.extent)
             /@property\s*(\((?:[^)]+)\))/ =~ @source
-            @attrs = !Regexp.last_match(1).nil? ? Regexp.last_match(1).strip.slice(1..-2).split(/,\s*/) : []
+            @attrs = !$1.nil? ? $1.strip.slice(1..-2).split(/,\s*/) : []
             @attrs = @attrs.each_with_object({}) do |o, h|
                 pair = o.split(/\s*=\s*/)
                 h[pair[0]] = pair.size > 1 ? pair[1] : true
@@ -671,13 +671,18 @@ module Bro
             @instance_vars = []
             @class_vars = []
             @opaque = false
+            
+            generic_fix = false
+            
             cursor.visit_children do |cursor, _parent|
                 case cursor.kind
                 when :cursor_unexposed_expr, :cursor_struct, :cursor_template_type_parameter, :cursor_type_ref, 417
                 # ignored
                 when :cursor_obj_c_class_ref
-                    @opaque = @name == cursor.spelling
+                    @opaque = false if generic_fix
+                    @opaque = @name == cursor.spelling unless generic_fix
                 when :cursor_obj_c_super_class_ref
+                    generic_fix = true
                     @superclass = cursor.spelling
                 when :cursor_obj_c_protocol_ref
                     @protocols.push(cursor.spelling)
@@ -1076,16 +1081,16 @@ module Bro
                     when /^List<(.*)>$/
                         s << "NSArray<?> val = (NSArray<?>) get(#{key_accessor});"
 
-                        generic_type = @model.resolve_type_by_name(Regexp.last_match(1).to_s)
+                        generic_type = @model.resolve_type_by_name($1.to_s)
                         if generic_type.is_a?(GlobalValueDictionaryWrapper)
-                            s << "List<#{Regexp.last_match(1)}> list = new ArrayList<>();"
+                            s << "List<#{$1}> list = new ArrayList<>();"
                             s << 'NSDictionary[] array = (NSDictionary[]) val.toArray(new NSDictionary[val.size()]);'
                             s << 'for (NSDictionary d : array) {'
-                            s << "   list.add(new #{Regexp.last_match(1)}(d));"
+                            s << "   list.add(new #{$1}(d));"
                             s << '}'
                             s << 'return list;'
                         else
-                            s << "return val.toList(#{Regexp.last_match(1)}.class);"
+                            s << "return val.toList(#{$1}.class);"
                               end
                     when 'Map<String, NSObject>'
                         s << "NSDictionary val = (NSDictionary) get(#{key_accessor});"
@@ -1134,16 +1139,16 @@ module Bro
                     when /^List<(.*)>$/
                         s << "CFArray val = get(#{key_accessor}, CFArray.class);"
 
-                        generic_type = @model.resolve_type_by_name(Regexp.last_match(1).to_s)
+                        generic_type = @model.resolve_type_by_name($1.to_s)
                         if generic_type.is_a?(GlobalValueDictionaryWrapper)
-                            s << "List<#{Regexp.last_match(1)}> list = new ArrayList<>();"
+                            s << "List<#{$1}> list = new ArrayList<>();"
                             s << 'CFDictionary[] array = val.toArray(CFDictionary.class);'
                             s << 'for (CFDictionary d : array) {'
-                            s << "   list.add(new #{Regexp.last_match(1)}(d));"
+                            s << "   list.add(new #{$1}(d));"
                             s << '}'
                             s << 'return list;'
                         else
-                            s << "return val.toList(#{Regexp.last_match(1)}.class);"
+                            s << "return val.toList(#{$1}.class);"
                               end
                     when 'Map<String, NSObject>'
                         s << "CFDictionary val = get(#{key_accessor}, CFDictionary.class);"
@@ -1205,7 +1210,7 @@ module Bro
                     when 'List<String>'
                         s = "NSArray.fromStrings(#{param_name})"
                     when /List<(.*)>/
-                        generic_type = @model.resolve_type_by_name(Regexp.last_match(1).to_s)
+                        generic_type = @model.resolve_type_by_name($1.to_s)
                         if generic_type.is_a?(GlobalValueDictionaryWrapper)
                             s = []
                             s << '    NSArray<NSDictionary> val = new NSMutableArray<>();'
@@ -1243,7 +1248,7 @@ module Bro
                     when 'List<String>'
                         s = "CFArray.fromStrings(#{param_name})"
                     when /List<(.*)>/
-                        generic_type = @model.resolve_type_by_name(Regexp.last_match(1).to_s)
+                        generic_type = @model.resolve_type_by_name($1.to_s)
                         if generic_type.is_a?(GlobalValueDictionaryWrapper)
                             s = []
                             s << '    CFArray val = CFMutableArray.create();'
@@ -1620,7 +1625,7 @@ module Bro
 
                 if name =~ /^(id|NSObject)<(.*)>$/
                     # Protocols
-                    names = Regexp.last_match(2).split(/\s*,/)
+                    names = $2.split(/\s*,/)
                     types = names.map { |e| resolve_type_by_name(e) }
                     if types.find_all(&:!).empty?
                         if types.size == 1
@@ -1633,14 +1638,14 @@ module Bro
                     resolve_type_by_name('ObjCClass')
                 elsif name =~ /(.*?)<(.*)>/ # Generic type
                     type_name = $1
-                    generic_name = $2.tr('* ', '').sub(/__kindof/, '')
+                    generic_name = $2.tr('* ', '').sub(/__kindof/, '').sub(/id<(.*)>/, '\1')
                     
-                    resolve_generic = ['NSString', 'NSObject', 'KeyType', 'ObjectType', 'Class', ',', '<', '>'].all? { |n| !generic_name.include? n }
+                    resolve_generic = ['NSString', 'NSCopying', 'NSObject', 'KeyType', 'ObjectType', 'Class', ',', '<', '>'].all? { |n| !generic_name.include? n }
                     
                     e = resolve_type_by_name(type_name)
                     generic_type = resolve_type_by_name(generic_name) if resolve_generic
                     
-                    resolve_generic &= generic_type.is_a?(ObjCClass) || generic_type.is_a?(Typedef) || generic_type.is_a?(Builtin)
+                    resolve_generic &= generic_type.is_a?(ObjCClass) || generic_type.is_a?(Typedef) || generic_type.is_a?(Builtin) # TODO support categories
                     
                     if resolve_generic && generic_type && e && e.pointer
                         [e, generic_type]
@@ -1843,13 +1848,14 @@ module Bro
         def getter_for_name(name, type, omit_prefix)
             base = omit_prefix ? name[0..-1] : name[0, 1].upcase + name[1..-1]
             getter = name
+            
             unless omit_prefix
                 if type == 'boolean'
                     case name.to_s
-                    when /^is/, /^has/, /^can/, /^should/, /^adjusts/, /^allows/, /^always/, /^animates/, /^appends/,
+                    when /^is\p{Lu}/, /^has\p{Lu}/, /^can\p{Lu}/, /^should/, /^adjusts/, /^allows/, /^always/, /^animates/, /^appends/,
                       /^applies/, /^apportions/, /^are/, /^autoenables/, /^automatically/, /^autoresizes/,
-                      /^autoreverses/, /^bounces/, /^casts/, /^checks/, /^clears/, /^clips/, /^collapses/, /^contains/, /^creates/,
-                      /^defers/, /^defines/, /^delays/, /^depends/, /^did/, /^dims/, /^disconnects/, /^displays/,
+                      /^autoreverses/, /^bounces/, /^cancels/, /^casts/, /^checks/, /^clears/, /^clips/, /^collapses/, /^contains/, /^creates/,
+                      /^defers/, /^defines/, /^delays/, /^depends/, /^did/, /^dims/, /^disables/, /^disconnects/, /^displays/,
                       /^does/, /^draws/, /^embeds/, /^enables/, /^enumerates/, /^evicts/, /^expects/, /^fixes/, /^fills/, /^flattens/, /^flips/, /^generates/, /^groups/,
                       /^hides/, /^ignores/, /^includes/, /^infers/, /^installs/, /^invalidates/, /^keeps/, /^locks/, /^marks/, /^masks/, /^merges/, /^migrates/, /^needs/,
                       /^normalizes/, /^notifies/, /^obscures/, /^opens/, /^overrides/, /^pauses/, /^performs/, /^prefers/, /^presents/, /^preserves/, /^propagates/,
@@ -1921,7 +1927,7 @@ module Bro
                         src = src.sub(/^\((long long|long|int)\)/, '')
                         # Only include macros that look like integer or floating point values for now
                         if src =~ /^(([-+.0-9Ee]+[fF]?)|(~?0x[0-9a-fA-F]+[UL]*)|(~?[0-9]+[UL]*))$/i
-                            value = Regexp.last_match(1)
+                            value = $1
                             value = value.sub(/^((0x)?.*)U$/i, '\1')
                             value = value.sub(/^((0x)?.*)UL$/i, '\1')
                             value = value.sub(/^((0x)?.*)ULL$/i, '\1L')
@@ -2201,7 +2207,7 @@ def property_to_java(model, owner, prop, props_conf, seen, adapter = false)
 
     if !conf['exclude']
         name = conf['name'] || prop.name
-
+        
         return [] if adapter && conf['skip_adapter']
 
         type = get_generic_type(model, owner, prop, prop.type, 0, conf['type'])
@@ -2363,7 +2369,7 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
         ret_anno = ''
         if !generics_s.empty? && ret_type[0] =~ /^(@Pointer|@ByVal|@MachineSizedFloat|@MachineSizedSInt|@MachineSizedUInt)/
             # Generic types and an annotated return type. Move the annotation before the generic type info
-            ret_anno = Regexp.last_match(1)
+            ret_anno = $1
             ret_type[0] = ret_type[0].sub(/^@.*\s+(.*)$/, '\1')
         end
         body = ';'
@@ -2614,7 +2620,7 @@ ARGV[1..-1].each do |yaml_file|
                 enum_type = enum.enum_type
                 if enum_type.name =~ /^Machine(.)Int$/
                     if !bits
-                        data['annotations'] = (data['annotations'] || []).push("@Marshaler(ValuedEnum.AsMachineSized#{Regexp.last_match(1)}IntMarshaler.class)")
+                        data['annotations'] = (data['annotations'] || []).push("@Marshaler(ValuedEnum.AsMachineSized#{$1}IntMarshaler.class)")
                     else
                         data['annotations'] = (data['annotations'] || []).push('@Marshaler(Bits.AsMachineSizedIntMarshaler.class)')
                     end
@@ -2637,7 +2643,7 @@ ARGV[1..-1].each do |yaml_file|
         elsif model.is_included?(enum) && (!c || !c['exclude'])
             # Possibly an enum with values that should be turned into constants
             potential_constant_enums.push(enum)
-            $stderr.puts "WARN: Turning the enum #{enum.name} with first value #{enum.values[0].name} into constants"
+            $stderr.puts "WARN: Turning the enum #{enum.name} with first value #{enum.values[0].name} into constants" unless enum.name == ''
         end
     end
 
