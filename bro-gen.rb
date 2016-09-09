@@ -2512,21 +2512,23 @@ ARGV[1..-1].each do |yaml_file|
     conf = global.merge conf
     conf['typedefs'] = (global['typedefs'] || {}).merge(conf['typedefs'] || {}).merge(conf['private_typedefs'] || {})
     
+    framework_roots = []
+    
     if conf['header_root']
-        framework_root = File.expand_path(File.dirname(yaml_file)) + conf['header_root']
-        header_root = framework_root
+        framework_roots[0] = File.expand_path(File.dirname(yaml_file)) + conf['header_root']
+        header_root = framework_roots[0]
     elsif File.exist?(File.expand_path(File.dirname(yaml_file)) + "/#{framework}.lib/Headers") # RoboPods Library
-        framework_root = File.expand_path(File.dirname(yaml_file))
-        header_root = framework_root + "/#{framework}.lib/Headers"
+        framework_roots[0] = File.expand_path(File.dirname(yaml_file))
+        header_root = framework_roots[0] + "/#{framework}.lib/Headers"
     elsif File.exist?(File.expand_path(File.dirname(yaml_file)) + "/#{framework}.framework/Headers") # RoboPods Framework
-        framework_root = File.expand_path(File.dirname(yaml_file))
-        header_root = framework_root + "/#{framework}.framework/Headers"
+        framework_roots[0] = File.expand_path(File.dirname(yaml_file))
+        header_root = framework_roots[0] + "/#{framework}.framework/Headers"
     elsif File.exist?(File.expand_path(File.dirname(yaml_file)) + "/../robopods/META-INF/robovm/ios/libs/#{framework}.framework/Headers") # RoboPods Framework
-        framework_root = File.expand_path(File.dirname(yaml_file)) + "/../robopods/META-INF/robovm/ios/libs"
-        header_root = framework_root + "/#{framework}.framework/Headers"
+        framework_roots[0] = File.expand_path(File.dirname(yaml_file)) + "/../robopods/META-INF/robovm/ios/libs"
+        header_root = framework_roots[0] + "/#{framework}.framework/Headers"
     else
-        framework_root = sysroot
-        header_root = framework_root
+        framework_roots[0] = sysroot
+        header_root = framework_roots[0]
     end
 
     imports = []
@@ -2544,6 +2546,8 @@ ARGV[1..-1].each do |yaml_file|
     imports += (conf['imports'] || [])
 
     (conf['include'] || []).each do |f|
+        custom_framework = f.include?('.yaml')
+    
         if (!f.include?('.'))
             ['robovm', 'mobi-robovm', 'mobirobovm'].each do |robovm_folder|
                 file_name = "#{script_dir}/../#{robovm_folder}/compiler/cocoatouch/src/main/bro-gen/#{f}.yaml"
@@ -2567,6 +2571,10 @@ ARGV[1..-1].each do |yaml_file|
         conf['typedefs'] = (c['typedefs'] || {}).merge(conf['typedefs'] || {})
         conf['annotations'] = (c['annotations'] || []).concat(conf['annotations'] || [])
         imports.push("#{c['package']}.*") if c['package']
+        
+        if custom_framework
+            framework_roots << File.expand_path(File.dirname(yaml_file), File.dirname(f))
+        end
     end
 
     $library = if conf['library'] && conf['library'] != 'Library.INTERNAL'
@@ -2586,7 +2594,10 @@ ARGV[1..-1].each do |yaml_file|
         clang_args.push(File.join(header_root, e))
     end
     
-    clang_args << "-F#{framework_root}" if framework_root != sysroot
+    framework_roots.each do |e|
+        clang_args << "-F#{e}" if e != sysroot
+    end
+    
     clang_args += conf['clang_args'] if conf['clang_args']
     translation_unit = index.parse_translation_unit(File.join(header_root, headers[0]), clang_args, [], detailed_preprocessing_record: true)
 
