@@ -107,13 +107,14 @@ module Bro
             Pointer.new self
         end
 
-        def is_available?(mac_version, ios_version)
+        def is_available?
             attrib = @attributes.find { |e| e.is_a?(AvailableAttribute) }
             if attrib
-                mac_version && attrib.mac_version && attrib.mac_version.to_f <= mac_version.to_f ||
-                    ios_version && attrib.ios_version && attrib.ios_version.to_f <= ios_version.to_f || false
+                $mac_version && attrib.mac_version && attrib.mac_version.to_f <= $mac_version.to_f ||
+                    $ios_version && attrib.ios_version && attrib.ios_version.to_f <= $ios_version.to_f || false
             else
-                true
+                attrib = @attributes.find { |e| e.is_a?(UnavailableAttribute) }
+                true unless attrib
             end
         end
 
@@ -150,7 +151,7 @@ module Bro
 
         def java_name
             if @pointee.is_a?(Builtin)
-                if %w(byte byte short char int long float double void).include?(@pointee.name)
+                if %w(byte short char int long float double void).include?(@pointee.name)
                     "#{@pointee.name.capitalize}Ptr"
                 elsif @pointee.name == 'MachineUInt'
                     'MachineSizedUIntPtr'
@@ -382,7 +383,9 @@ module Bro
            source == '__WATCHOS_PROHIBITED' || source == '__TVOS_PROHIBITED' || source.start_with?('NS_SWIFT_UNAVAILABLE') || (source.start_with?('API_UNAVAILABLE') && !source.include?('ios')) ||
            source == 'UI_APPEARANCE_SELECTOR' || source == 'CF_RETURNS_NOT_RETAINED' || source == 'NS_REQUIRES_SUPER'
             return IgnoredAttribute.new source
-        elsif source == 'NS_UNAVAILABLE' || source == '__unavailable' || source.start_with?('OBJC_UNAVAILABLE') || source.start_with?('OBJC_SWIFT_UNAVAILABLE') || source == 'UNAVAILABLE_ATTRIBUTE' || source == '__IOS_PROHIBITED' || source.match(/API_UNAVAILABLE\(.*ios/) # TODO should differ between platforms?
+        elsif source == 'NS_UNAVAILABLE' || source == '__unavailable' || source.start_with?('OBJC_UNAVAILABLE') || source.start_with?('OBJC_SWIFT_UNAVAILABLE') || 
+              source == 'UNAVAILABLE_ATTRIBUTE' || source == '__IOS_PROHIBITED' || source.match(/API_UNAVAILABLE\(.*ios/) || # TODO should differ between platforms?
+              source =~ /deprecated\(".*"\)/
             return UnavailableAttribute.new source
         elsif source.match(/_AVAILABLE/) || source.match(/_DEPRECATED/) ||
               source.match(/_AVAILABLE_STARTING/) || source.match(/_AVAILABLE_BUT_DEPRECATED/)
@@ -966,7 +969,7 @@ module Bro
 
         def append_convenience_methods(lines)
             lines << "\n"
-            @values.find_all { |v| v.is_available?($mac_version, $ios_version) && !v.is_outdated? }.each do |v|
+            @values.find_all { |v| v.is_available? && !v.is_outdated? }.each do |v|
                 vconf = @model.get_value_conf(v.name)
                 vname = vconf['name'] || v.name
 
@@ -1279,7 +1282,7 @@ module Bro
             lines << 'public static class Keys {'
             lines << '    static { Bro.bind(Keys.class); }'
 
-            @values.find_all { |v| v.is_available?($mac_version, $ios_version) && !v.is_outdated? }.each do |v|
+            @values.find_all { |v| v.is_available? && !v.is_outdated? }.each do |v|
                 vconf = @model.get_value_conf(v.name)
 
                 indentation = '    '
@@ -2604,14 +2607,14 @@ ARGV[1..-1].each do |yaml_file|
             bits = enum.is_options? || c['bits']
             ignore = c['ignore']
             if bits
-                values = enum.values.find_all { |e| (!ignore || !e.name.match(ignore)) && !e.is_outdated? }.map do |e|
+                values = enum.values.find_all { |e| (!ignore || !e.name.match(ignore)) && !e.is_outdated? && e.is_available? }.map do |e|
                     model.push_availability(e).push("public static final #{java_name} #{e.java_name} = new #{java_name}(#{e.value}L)").join("\n    ")
                 end.join(";\n    ") + ';'
                 if !c['skip_none'] && !enum.values.find { |e| e.java_name == 'None' }
                     values = "public static final #{java_name} None = new #{java_name}(0L);\n    #{values}"
                 end
             else
-                values = enum.values.find_all { |e| (!ignore || !e.name.match(ignore)) && !e.is_outdated? }.map do |e|
+                values = enum.values.find_all { |e| (!ignore || !e.name.match(ignore)) && !e.is_outdated? && e.is_available? }.map do |e|
                     model.push_availability(e).push("#{e.java_name}(#{e.value}L)").join("\n    ")
                 end.join(",\n    ") + ';'
             end
@@ -2670,7 +2673,7 @@ ARGV[1..-1].each do |yaml_file|
 
     # Assign global values to classes
     values = {}
-    model.global_values.find_all { |v| v.is_available?($mac_version, $ios_version) && !v.is_outdated? }.each do |v|
+    model.global_values.find_all { |v| v.is_available? && !v.is_outdated? }.each do |v|
         vconf = model.get_value_conf(v.name)
         if vconf && !vconf['exclude']
             owner = vconf['class'] || default_class
@@ -2828,7 +2831,7 @@ ARGV[1..-1].each do |yaml_file|
 
         e.values.sort_by { |v| v.since || '' }
 
-        e.values.find_all { |v| v.is_available?($mac_version, $ios_version) && !v.is_outdated? }.each do |v|
+        e.values.find_all { |v| v.is_available? && !v.is_outdated? }.each do |v|
             vconf = model.get_value_conf(v.name)
 
             vname = vconf['name'] || v.name
@@ -2889,7 +2892,7 @@ ARGV[1..-1].each do |yaml_file|
 
     # Assign functions to classes
     functions = {}
-    model.functions.find_all { |f| f.is_available?($mac_version, $ios_version) && !f.is_outdated? }.each do |f|
+    model.functions.find_all { |f| f.is_available? && !f.is_outdated? }.each do |f|
         fconf = model.get_function_conf(f.name)
         if fconf && !fconf['exclude']
             owner = fconf['class'] || default_class
@@ -3234,12 +3237,12 @@ ARGV[1..-1].each do |yaml_file|
         constructors_lines = []
         properties_lines = []
         h[:members].each do |(members, c)|
-            members.find_all { |m| m.is_a?(Bro::ObjCMethod) && m.is_available?($mac_version, $ios_version) }.each do |m|
+            members.find_all { |m| m.is_a?(Bro::ObjCMethod) && m.is_available? }.each do |m|
                 a = method_to_java(model, owner_name, owner, m, c['methods'] || {}, seen)
                 methods_lines.concat(a[0])
                 constructors_lines.concat(a[1])
             end
-            members.find_all { |m| m.is_a?(Bro::ObjCProperty) && m.is_available?($mac_version, $ios_version) }.each do |p|
+            members.find_all { |m| m.is_a?(Bro::ObjCProperty) && m.is_available? }.each do |p|
                 properties_lines.concat(property_to_java(model, owner, p, c['properties'] || {}, seen))
             end
         end
