@@ -3277,8 +3277,9 @@ ARGV[1..-1].each do |yaml_file|
             if c['skip_handle_constructor'] == false
                 constructors_lines.unshift("@Deprecated protected #{owner_name}(long handle) { super(handle); }")
             end
-            if owner.has_def_constructor? && !c['skip_def_constructor']
-                constructors_lines.unshift("public #{owner_name}() {}")
+            unless c['skip_def_constructor']
+                cv = owner.has_def_constructor? ? 'public' : 'protected'
+                constructors_lines.unshift("#{cv} #{owner_name}() {}")
             end
         elsif owner.is_a?(Bro::ObjCCategory)
             constructors_lines.unshift("private #{owner_name}() {}")
