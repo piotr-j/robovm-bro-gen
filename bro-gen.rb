@@ -674,6 +674,7 @@ module Bro
             @instance_vars = []
             @class_vars = []
             @opaque = false
+            @def_constructor = true
             
             generic_fix = false
             
@@ -694,7 +695,9 @@ module Bro
                 when :cursor_obj_c_class_var_decl
                 #          @class_vars.push(ObjCClassVar.new(model, cursor))
                 when :cursor_obj_c_instance_method_decl
-                    @instance_methods.push(ObjCInstanceMethod.new(model, cursor, self))
+                    method = ObjCInstanceMethod.new(model, cursor, self)
+                    @def_constructor = false if is_init?(self, method) && !method.is_available?
+                    @instance_methods.push(method)
                 when :cursor_obj_c_class_method_decl
                     @class_methods.push(ObjCClassMethod.new(model, cursor, self))
                 when :cursor_obj_c_property_decl
@@ -719,6 +722,10 @@ module Bro
 
         def is_opaque?
             @opaque
+        end
+        
+        def has_def_constructor?
+            @def_constructor
         end
     end
 
@@ -3270,7 +3277,7 @@ ARGV[1..-1].each do |yaml_file|
             if c['skip_handle_constructor'] == false
                 constructors_lines.unshift("@Deprecated protected #{owner_name}(long handle) { super(handle); }")
             end
-            unless c['skip_def_constructor']
+            if owner.has_def_constructor? && !c['skip_def_constructor']
                 constructors_lines.unshift("public #{owner_name}() {}")
             end
         elsif owner.is_a?(Bro::ObjCCategory)
