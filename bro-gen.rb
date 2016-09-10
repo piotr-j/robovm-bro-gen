@@ -385,7 +385,7 @@ module Bro
             return IgnoredAttribute.new source
         elsif source == 'NS_UNAVAILABLE' || source == '__unavailable' || source.start_with?('OBJC_UNAVAILABLE') || source.start_with?('OBJC_SWIFT_UNAVAILABLE') || 
               source == 'UNAVAILABLE_ATTRIBUTE' || source == '__IOS_PROHIBITED' || source.match(/API_UNAVAILABLE\(.*ios/) || # TODO should differ between platforms?
-              source =~ /deprecated\(".*"\)/
+              source =~ /deprecated\(".*"\)/ || source == 'deprecated'
             return UnavailableAttribute.new source
         elsif source.match(/_AVAILABLE/) || source.match(/_DEPRECATED/) ||
               source.match(/_AVAILABLE_STARTING/) || source.match(/_AVAILABLE_BUT_DEPRECATED/)
@@ -2396,6 +2396,7 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
         constructor_lines = []
 
         annotations = conf['annotations'] && !conf['annotations'].empty? ? conf['annotations'].uniq.join(' ') : nil
+        static_constructor = !conf['constructor'].nil? && conf['constructor'] == true && is_static
 
         if conf['throws']
             error_type = 'NSError'
@@ -2412,7 +2413,7 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
             end
             params_s = params.length.zero? ? 'ptr' : "#{params.join(', ')}, ptr"
 
-            unless owner.is_a?(Bro::ObjCClass) && is_init?(owner, method)
+            unless owner.is_a?(Bro::ObjCClass) && is_init?(owner, method) || static_constructor
                 model.push_availability(method, method_lines)
 
                 method_lines << annotations.to_s if annotations
@@ -2428,8 +2429,6 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
 
             visibility = 'private'
         end
-        
-        static_constructor = !conf['constructor'].nil? && conf['constructor'] == true && is_static
         
         if (is_static && static_constructor) 
             ret_type[0] = "@Pointer long"
@@ -2472,7 +2471,16 @@ def method_to_java(model, owner_name, owner, method, methods_conf, seen, adapter
                 end
             elsif (static_constructor)
                 if conf['throws']
-                    ### TODO ???
+                    args_s2 = param_types[0..-2].map { |p| p[2] }.join(', ')
+                
+                    constructor_lines << "#{constructor_visibility}#{!generics_s.empty? ? ' ' + generics_s : ''} #{owner_name}(#{new_parameters_s}) throws #{conf['throws']} {"
+                    constructor_lines << "   this(#{args_s2}, new #{error_type}.#{error_type}Ptr());"
+                    constructor_lines << "}"
+                    constructor_lines << "private#{!generics_s.empty? ? ' ' + generics_s : ''} #{owner_name}(#{new_parameters_s}, #{error_type}.#{error_type}Ptr ptr) throws #{conf['throws']} {"
+                    constructor_lines << "   super((Handle) null, #{name}(#{args_s2}, ptr));"
+                    constructor_lines << "   retain(getHandle());"
+                    constructor_lines << "   if (ptr.get() != null) { throw new #{conf['throws']}(ptr.get()); }"
+                    constructor_lines << "}"
                 else
                     constructor_lines << "#{constructor_visibility}#{generics_s.size>0 ? ' ' + generics_s : ''} #{owner_name}(#{parameters_s}) { super((Handle) null, #{name}(#{args_s})); retain(getHandle()); }"
                 end
