@@ -385,7 +385,7 @@ module Bro
             return IgnoredAttribute.new source
         elsif source == 'NS_UNAVAILABLE' || source == '__unavailable' || source.start_with?('OBJC_UNAVAILABLE') || source.start_with?('OBJC_SWIFT_UNAVAILABLE') || 
               source == 'UNAVAILABLE_ATTRIBUTE' || source == '__IOS_PROHIBITED' || source.match(/API_UNAVAILABLE\(.*ios/) || # TODO should differ between platforms?
-              source =~ /deprecated\(".*"\)/ || source == 'deprecated'
+              source =~ /deprecated\(".*"\)/ || source == 'deprecated' || source == 'unavailable'
             return UnavailableAttribute.new source
         elsif source.match(/_AVAILABLE/) || source.match(/_DEPRECATED/) ||
               source.match(/_AVAILABLE_STARTING/) || source.match(/_AVAILABLE_BUT_DEPRECATED/)
@@ -3233,11 +3233,11 @@ ARGV[1..-1].each do |yaml_file|
         methods_lines = []
         properties_lines = []
         h[:members].each do |(members, c)|
-            members.find_all { |m| m.is_a?(Bro::ObjCMethod) }.each do |m|
+            members.find_all { |m| m.is_a?(Bro::ObjCMethod) && m.is_available? }.each do |m|
                 a = method_to_java(model, owner_name, owner, m, c['methods'] || {}, {}, true)
                 methods_lines.concat(a[0])
             end
-            members.find_all { |m| m.is_a?(Bro::ObjCProperty) }.each do |p|
+            members.find_all { |m| m.is_a?(Bro::ObjCProperty) && m.is_available? }.each do |p|
                 properties_lines.concat(property_to_java(model, owner, p, c['properties'] || {}, {}, true))
             end
         end
