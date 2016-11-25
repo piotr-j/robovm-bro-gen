@@ -381,7 +381,7 @@ module Bro
            source == 'OBJC_ROOT_CLASS' || source == '__ai' || source.end_with?('_EXTERN_WEAK') || source == 'NS_DESIGNATED_INITIALIZER' || source.start_with?('NS_EXTENSION_UNAVAILABLE_IOS') ||
            source == 'NS_REQUIRES_PROPERTY_DEFINITIONS' || source.start_with?('DEPRECATED_MSG_ATTRIBUTE') || source == 'NS_REFINED_FOR_SWIFT' || source.start_with?('NS_SWIFT_NAME') ||
            source == '__WATCHOS_PROHIBITED' || source == '__TVOS_PROHIBITED' || source.start_with?('NS_SWIFT_UNAVAILABLE') || (source.start_with?('API_UNAVAILABLE') && !source.include?('ios')) ||
-           source == 'UI_APPEARANCE_SELECTOR' || source == 'CF_RETURNS_NOT_RETAINED' || source == 'NS_REQUIRES_SUPER'
+           source == 'UI_APPEARANCE_SELECTOR' || source == 'CF_RETURNS_NOT_RETAINED' || source == 'NS_REQUIRES_SUPER' || source.match(/__WATCHOS_AVAILABLE/)
             return IgnoredAttribute.new source
         elsif source == 'NS_UNAVAILABLE' || source == '__unavailable' || source.start_with?('OBJC_UNAVAILABLE') || source.start_with?('OBJC_SWIFT_UNAVAILABLE') || 
               source == 'UNAVAILABLE_ATTRIBUTE' || source == '__IOS_PROHIBITED' || source.match(/API_UNAVAILABLE\(.*ios/) || # TODO should differ between platforms?
